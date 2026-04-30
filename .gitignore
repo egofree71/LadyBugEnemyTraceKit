@@ -1,0 +1,23 @@
+# Godot
+godot/.godot/
+godot/bin/
+godot/obj/
+godot/.mono/
+
+# Generated traces / logs
+godot/data/traces/godot_candidate_trace.jsonl
+godot/data/traces/*_generated*.jsonl
+mame/*_trace.jsonl
+mame/*_decisions.jsonl
+mame/*_summary.txt
+mame/*_initial_snapshot.json
+
+# MAME save states / logs
+*.sta
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vs/
+.idea/

@@ -1,0 +1,17 @@
+; Engine configuration file.
+; Godot 4.6.x .NET project.
+
+config_version=5
+
+[application]
+config/name="LadyBug Enemy Trace Lab"
+run/main_scene="res://scenes/Main.tscn"
+config/features=PackedStringArray("4.6", "C#")
+config/icon="res://icon.svg"
+
+[dotnet]
+project/assembly_name="LadyBugEnemyTraceLab"
+
+[display]
+window/size/viewport_width=1100
+window/size/viewport_height=820
