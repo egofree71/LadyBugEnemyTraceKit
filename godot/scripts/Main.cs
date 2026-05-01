@@ -12,11 +12,13 @@ public partial class Main : Control
 {
     private LineEdit _mameTracePath = null!;
     private LineEdit _candidateTracePath = null!;
+    private LineEdit _z80EventsPath = null!;
     private TextEdit _log = null!;
     private EnemyPathView _pathView = null!;
 
     private List<ArcadeTraceFrame> _mameFrames = new();
     private List<ArcadeTraceFrame> _candidateFrames = new();
+    private List<Z80EventFrame> _z80Events = new();
 
     public override void _Ready()
     {
@@ -55,6 +57,7 @@ public partial class Main : Control
 
         _mameTracePath = AddPathRow(root, "Trace MAME", "res://data/traces/ladybug_enemy_trace_trace.jsonl", OnLoadMameTrace);
         _candidateTracePath = AddPathRow(root, "Trace candidate", "res://data/traces/godot_candidate_trace.jsonl", OnLoadCandidateTrace);
+        _z80EventsPath = AddPathRow(root, "Trace Z80 events", "res://data/traces/ladybug_enemy_v15_trace_z80_events.jsonl", OnLoadZ80Events);
 
         var actionRow1 = new HFlowContainer
         {
@@ -90,6 +93,10 @@ public partial class Main : Control
         timingProbeButton.Pressed += OnCreateTimingProbeCandidate;
         actionRow1.AddChild(timingProbeButton);
 
+        var z80GuidedButton = new Button { Text = "Générer candidate Z80-guided v16" };
+        z80GuidedButton.Pressed += OnCreateZ80GuidedCandidateV16;
+        actionRow1.AddChild(z80GuidedButton);
+
         var centerOracleButton = new Button { Text = "Générer candidate oracle-centres" };
         centerOracleButton.Pressed += OnCreateCenterOracleCandidate;
         actionRow1.AddChild(centerOracleButton);
@@ -119,6 +126,10 @@ public partial class Main : Control
         var timingProbeAnalyzeButton = new Button { Text = "Analyser timing v13" };
         timingProbeAnalyzeButton.Pressed += OnAnalyzePreferenceTimingProbe;
         actionRow2.AddChild(timingProbeAnalyzeButton);
+
+        var z80LocalFallbackAnalyzeButton = new Button { Text = "Analyser local-door/fallback v16" };
+        z80LocalFallbackAnalyzeButton.Pressed += OnAnalyzeZ80LocalDoorFallbackV16;
+        actionRow2.AddChild(z80LocalFallbackAnalyzeButton);
 
         var reversalAnalyzeButton = new Button { Text = "Analyser demi-tours MAME" };
         reversalAnalyzeButton.Pressed += OnAnalyzeForcedReversals;
@@ -222,6 +233,31 @@ public partial class Main : Control
         }
     }
 
+
+    private void OnLoadZ80Events()
+    {
+        try
+        {
+            Z80EventLoadResult result = Z80EventJsonlReader.Load(_z80EventsPath.Text);
+            _z80Events = result.Events;
+            Log($"Trace Z80 events chargée: {result.Events.Count} events depuis {result.Path}");
+            foreach (string warning in result.Warnings)
+                Log("  warning: " + warning);
+
+            if (_z80Events.Count > 0)
+            {
+                Z80EventFrame first = _z80Events[0];
+                Z80EventFrame last = _z80Events[^1];
+                Log($"Z80 first: sample={first.FrameSample}, frame={first.MameFrame}, tag={first.Tag}, pc={first.Pc}");
+                Log($"Z80 last : sample={last.FrameSample}, frame={last.MameFrame}, tag={last.Tag}, pc={last.Pc}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log("ERREUR chargement Z80 events: " + ex.Message);
+        }
+    }
+
     private bool EnsureMameTraceLoaded()
     {
         if (_mameFrames.Count == 0)
@@ -231,6 +267,19 @@ public partial class Main : Control
             return true;
 
         Log("Action impossible: aucune trace MAME chargée.");
+        return false;
+    }
+
+
+    private bool EnsureZ80EventsLoaded()
+    {
+        if (_z80Events.Count == 0)
+            OnLoadZ80Events();
+
+        if (_z80Events.Count > 0)
+            return true;
+
+        Log("Action impossible: aucune trace Z80 events chargée.");
         return false;
     }
 
@@ -336,6 +385,22 @@ public partial class Main : Control
             Log("  " + message);
     }
 
+
+    private void OnCreateZ80GuidedCandidateV16()
+    {
+        if (!EnsureMameTraceLoaded() || !EnsureZ80EventsLoaded())
+            return;
+
+        CandidateGenerationResult result = Z80EventGuidedCandidateTraceFactory.Create(_mameFrames, _z80Events);
+        _candidateFrames = result.Frames;
+        TraceJsonlWriter.Write(_candidateTracePath.Text, _candidateFrames);
+        _pathView.SetTrace(_candidateFrames, 0);
+
+        Log($"Candidate Z80-guided v16 écrite: {_candidateTracePath.Text}");
+        foreach (string message in result.Messages)
+            Log("  " + message);
+    }
+
     private void OnCreateCenterOracleCandidate()
     {
         if (!EnsureMameTraceLoaded())
@@ -364,6 +429,16 @@ public partial class Main : Control
         Log($"Candidate replay guidé écrite: {_candidateTracePath.Text}");
         foreach (string message in result.Messages)
             Log("  " + message);
+    }
+
+
+    private void OnAnalyzeZ80LocalDoorFallbackV16()
+    {
+        if (!EnsureMameTraceLoaded() || !EnsureZ80EventsLoaded())
+            return;
+
+        foreach (string line in Z80LocalDoorFallbackAnalyzer.BuildReport(_mameFrames, _z80Events))
+            Log(line);
     }
 
     private void OnAnalyzeMameDecisions()
