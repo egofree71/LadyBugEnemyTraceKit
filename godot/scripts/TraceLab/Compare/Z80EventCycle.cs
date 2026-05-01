@@ -23,8 +23,19 @@ public sealed class Z80EventCycle
     public Z80EventFrame? Move => First("MoveOnePixel_4224");
     public Z80EventFrame? Commit => First("CommitTempState_43CE");
 
+    /// <summary>
+    /// Best snapshot for the state actually being processed by this enemy cycle.
+    ///
+    /// The 42BA event is taken before Enemy_UpdateOne has copied the current slot
+    /// into 61BD/61BE/61BF. Once enemy1 is active, the temp registers can still
+    /// contain the previous slot values at 42BA. The first branch event after that
+    /// copy, typically TryPreferred or ForcedReversalTest, is therefore the safer
+    /// start snapshot for position/dir diagnostics.
+    /// </summary>
+    public Z80EventFrame? DecisionStart => TryPreferred ?? ForcedReversalTest ?? Move ?? Commit ?? Enter;
+
     public bool IsEnemy0 => Slot == 0;
-    public bool IsAtCenter => Enter is not null && IsCenter(Enter);
+    public bool IsAtCenter => DecisionStart is not null && IsCenter(DecisionStart);
     public bool HasLocalDoorFallback => LocalDoorCheck is not null && Fallback is not null;
     public bool HasFallback => Fallback is not null;
     public bool HasTryPreferred => TryPreferred is not null;
@@ -33,13 +44,27 @@ public sealed class Z80EventCycle
     public int EnterDir => Byte(Enter?.TmpDir);
     public int EnterX => Byte(Enter?.TmpX);
     public int EnterY => Byte(Enter?.TmpY);
-    public int MoveDir => Byte(Move?.TmpDir);
-    public int CommitDir => Byte(Commit?.TmpDir);
+
+    public int StartDir => Byte(DecisionStart?.TmpDir) & 0x0f;
+    public int StartX => Byte(DecisionStart?.TmpX);
+    public int StartY => Byte(DecisionStart?.TmpY);
+
+    public int MoveDir => Byte(Move?.TmpDir) & 0x0f;
+    public int CommitDir => Byte(Commit?.TmpDir) & 0x0f;
     public int CommitX => Byte(Commit?.TmpX);
     public int CommitY => Byte(Commit?.TmpY);
-    public int Preferred0 => Enter is not null && Enter.Preferred.Count > 0 ? Byte(Enter.Preferred[0]) : 0;
-    public int RejectedMaskAtFallback => Byte(Fallback?.RejectedMask);
-    public int RejectedMaskAtLocalDoor => Byte(LocalDoorCheck?.RejectedMask);
+
+    public int Preferred0
+    {
+        get
+        {
+            Z80EventFrame? source = TryPreferred ?? DecisionStart ?? Enter;
+            return source is not null && source.Preferred.Count > 0 ? Byte(source.Preferred[0]) & 0x0f : 0;
+        }
+    }
+
+    public int RejectedMaskAtFallback => Byte(Fallback?.RejectedMask) & 0x0f;
+    public int RejectedMaskAtLocalDoor => Byte(LocalDoorCheck?.RejectedMask) & 0x0f;
 
     public string PathKind
     {
@@ -98,8 +123,8 @@ public static class Z80EventCycleBuilder
                 }
 
                 // The arcade loop walks enemy slots in RAM order: enemy0, enemy1, enemy2, enemy3.
-                // The 42BA snapshot still contains the previous temp values for later slots,
-                // so position-based slot inference is misleading once enemy1 is active.
+                // Do not infer the slot from 61BD/61BE/61BF at 42BA: those temp registers can
+                // still describe the previously processed slot at the instant this breakpoint fires.
                 current = new Z80EventCycle
                 {
                     Slot = slotOrdinalInSample,
@@ -123,22 +148,5 @@ public static class Z80EventCycleBuilder
             cycles.Add(current);
 
         return cycles;
-    }
-
-    private static int InferSlot(Z80EventFrame evt)
-    {
-        int tmpDir = Hex.ToByte(evt.TmpDir) & 0x0f;
-        int tmpX = Hex.ToByte(evt.TmpX);
-        int tmpY = Hex.ToByte(evt.TmpY);
-
-        int e0Dir = (Hex.ToByte(evt.Enemy0Raw) >> 4) & 0x0f;
-        if (tmpX == Hex.ToByte(evt.Enemy0X) && tmpY == Hex.ToByte(evt.Enemy0Y) && (tmpDir == e0Dir || e0Dir == 0))
-            return 0;
-
-        int e1Dir = (Hex.ToByte(evt.Enemy1Raw) >> 4) & 0x0f;
-        if (tmpX == Hex.ToByte(evt.Enemy1X) && tmpY == Hex.ToByte(evt.Enemy1Y) && (tmpDir == e1Dir || e1Dir == 0))
-            return 1;
-
-        return -1;
     }
 }

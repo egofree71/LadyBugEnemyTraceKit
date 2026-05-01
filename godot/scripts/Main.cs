@@ -15,6 +15,7 @@ public partial class Main : Control
     private LineEdit _z80EventsPath = null!;
     private TextEdit _log = null!;
     private EnemyPathView _pathView = null!;
+    private VBoxContainer _legacyTools = null!;
 
     private List<ArcadeTraceFrame> _mameFrames = new();
     private List<ArcadeTraceFrame> _candidateFrames = new();
@@ -24,7 +25,7 @@ public partial class Main : Control
     {
         BuildUi();
         Log("LadyBug Enemy Trace Lab prêt.");
-        Log("Étape actuelle: charger la trace MAME, générer une candidate expérimentale, puis comparer le mouvement enemy0.");
+        Log("Étape actuelle: charger la trace MAME + events Z80, générer la candidate local-door/fallback v17, puis comparer enemy0.");
     }
 
     private void BuildUi()
@@ -55,15 +56,70 @@ public partial class Main : Control
             Text = "Projet séparé pour analyser une trace MAME et comparer une trace candidate Godot. Tu peux lancer directement depuis l'éditeur Godot."
         });
 
-        _mameTracePath = AddPathRow(root, "Trace MAME", "res://data/traces/ladybug_enemy_trace_trace.jsonl", OnLoadMameTrace);
+        _mameTracePath = AddPathRow(root, "Trace MAME", "res://data/traces/ladybug_enemy_v15_trace_trace.jsonl", OnLoadMameTrace);
         _candidateTracePath = AddPathRow(root, "Trace candidate", "res://data/traces/godot_candidate_trace.jsonl", OnLoadCandidateTrace);
         _z80EventsPath = AddPathRow(root, "Trace Z80 events", "res://data/traces/ladybug_enemy_v15_trace_z80_events.jsonl", OnLoadZ80Events);
+
+        var currentTitle = new Label
+        {
+            Text = "Flow principal v17"
+        };
+        currentTitle.AddThemeFontSizeOverride("font_size", 16);
+        root.AddChild(currentTitle);
+
+        var currentRow = new HFlowContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        root.AddChild(currentRow);
+
+        var analyzeV17Button = new Button { Text = "Analyser local-door/fallback v17" };
+        analyzeV17Button.Pressed += OnAnalyzeZ80LocalDoorFallbackV17;
+        currentRow.AddChild(analyzeV17Button);
+
+        var localDoorFallbackV17Button = new Button { Text = "Générer candidate local-door/fallback v17" };
+        localDoorFallbackV17Button.Pressed += OnCreateLocalDoorFallbackCandidateV17;
+        currentRow.AddChild(localDoorFallbackV17Button);
+
+        var z80GuidedMainButton = new Button { Text = "Générer candidate Z80-guided v16" };
+        z80GuidedMainButton.Pressed += OnCreateZ80GuidedCandidateV16;
+        currentRow.AddChild(z80GuidedMainButton);
+
+        var compareMovementMainButton = new Button { Text = "Comparer mouvement enemy0" };
+        compareMovementMainButton.Pressed += OnCompareEnemy0Movement;
+        currentRow.AddChild(compareMovementMainButton);
+
+        var compareFullMainButton = new Button { Text = "Comparer complet" };
+        compareFullMainButton.Pressed += OnCompareFull;
+        currentRow.AddChild(compareFullMainButton);
+
+        var clearMainButton = new Button { Text = "Effacer log" };
+        clearMainButton.Pressed += () => _log.Text = string.Empty;
+        currentRow.AddChild(clearMainButton);
+
+        var legacyToggle = new Button { Text = "Afficher / masquer anciens probes" };
+        legacyToggle.Pressed += () => _legacyTools.Visible = !_legacyTools.Visible;
+        root.AddChild(legacyToggle);
+
+        _legacyTools = new VBoxContainer
+        {
+            Visible = false,
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
+        root.AddChild(_legacyTools);
+
+        var legacyTitle = new Label
+        {
+            Text = "Anciens probes / historique"
+        };
+        legacyTitle.AddThemeFontSizeOverride("font_size", 14);
+        _legacyTools.AddChild(legacyTitle);
 
         var actionRow1 = new HFlowContainer
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        root.AddChild(actionRow1);
+        _legacyTools.AddChild(actionRow1);
 
         var makeCandidateButton = new Button { Text = "Créer candidate naïve de démo" };
         makeCandidateButton.Pressed += OnCreateNaiveCandidate;
@@ -109,7 +165,7 @@ public partial class Main : Control
         {
             SizeFlagsHorizontal = SizeFlags.ExpandFill
         };
-        root.AddChild(actionRow2);
+        _legacyTools.AddChild(actionRow2);
 
         var analyzeButton = new Button { Text = "Analyser décisions MAME" };
         analyzeButton.Pressed += OnAnalyzeMameDecisions;
@@ -401,6 +457,21 @@ public partial class Main : Control
             Log("  " + message);
     }
 
+    private void OnCreateLocalDoorFallbackCandidateV17()
+    {
+        if (!EnsureMameTraceLoaded() || !EnsureZ80EventsLoaded())
+            return;
+
+        CandidateGenerationResult result = LocalDoorFallbackCandidateTraceFactoryV17.Create(_mameFrames, _z80Events);
+        _candidateFrames = result.Frames;
+        TraceJsonlWriter.Write(_candidateTracePath.Text, _candidateFrames);
+        _pathView.SetTrace(_candidateFrames, 0);
+
+        Log($"Candidate local-door/fallback v17 écrite: {_candidateTracePath.Text}");
+        foreach (string message in result.Messages)
+            Log("  " + message);
+    }
+
     private void OnCreateCenterOracleCandidate()
     {
         if (!EnsureMameTraceLoaded())
@@ -431,6 +502,15 @@ public partial class Main : Control
             Log("  " + message);
     }
 
+
+    private void OnAnalyzeZ80LocalDoorFallbackV17()
+    {
+        if (!EnsureMameTraceLoaded() || !EnsureZ80EventsLoaded())
+            return;
+
+        foreach (string line in Z80LocalDoorFallbackAnalyzerV17.BuildReport(_mameFrames, _z80Events))
+            Log(line);
+    }
 
     private void OnAnalyzeZ80LocalDoorFallbackV16()
     {
