@@ -53,10 +53,13 @@ public partial class Main : Control
             Text = "Projet séparé pour analyser une trace MAME et comparer une trace candidate Godot. Tu peux lancer directement depuis l'éditeur Godot."
         });
 
-        _mameTracePath = AddPathRow(root, "Trace MAME", "res://data/traces/ladybug_enemy_trace_movement_only_000_624.jsonl", OnLoadMameTrace);
+        _mameTracePath = AddPathRow(root, "Trace MAME", "res://data/traces/ladybug_enemy_trace_trace.jsonl", OnLoadMameTrace);
         _candidateTracePath = AddPathRow(root, "Trace candidate", "res://data/traces/godot_candidate_trace.jsonl", OnLoadCandidateTrace);
 
-        var actionRow1 = new HBoxContainer();
+        var actionRow1 = new HFlowContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         root.AddChild(actionRow1);
 
         var makeCandidateButton = new Button { Text = "Créer candidate naïve de démo" };
@@ -75,6 +78,18 @@ public partial class Main : Control
         currentPrefButton.Pressed += OnCreateStaticMazeCurrentPrefCandidate;
         actionRow1.AddChild(currentPrefButton);
 
+        var corridorGatedButton = new Button { Text = "Générer candidate corridor-gated" };
+        corridorGatedButton.Pressed += OnCreateCorridorGatedCandidate;
+        actionRow1.AddChild(corridorGatedButton);
+
+        var reversalProbeButton = new Button { Text = "Générer candidate reversal-probe v11" };
+        reversalProbeButton.Pressed += OnCreateReversalProbeCandidate;
+        actionRow1.AddChild(reversalProbeButton);
+
+        var timingProbeButton = new Button { Text = "Générer candidate timing-probe v13" };
+        timingProbeButton.Pressed += OnCreateTimingProbeCandidate;
+        actionRow1.AddChild(timingProbeButton);
+
         var centerOracleButton = new Button { Text = "Générer candidate oracle-centres" };
         centerOracleButton.Pressed += OnCreateCenterOracleCandidate;
         actionRow1.AddChild(centerOracleButton);
@@ -83,7 +98,10 @@ public partial class Main : Control
         learnedButton.Pressed += OnCreateLearnedDecisionCandidate;
         actionRow1.AddChild(learnedButton);
 
-        var actionRow2 = new HBoxContainer();
+        var actionRow2 = new HFlowContainer
+        {
+            SizeFlagsHorizontal = SizeFlags.ExpandFill
+        };
         root.AddChild(actionRow2);
 
         var analyzeButton = new Button { Text = "Analyser décisions MAME" };
@@ -97,6 +115,14 @@ public partial class Main : Control
         var timingButton = new Button { Text = "Analyser timing préférences" };
         timingButton.Pressed += OnAnalyzePreferenceTiming;
         actionRow2.AddChild(timingButton);
+
+        var timingProbeAnalyzeButton = new Button { Text = "Analyser timing v13" };
+        timingProbeAnalyzeButton.Pressed += OnAnalyzePreferenceTimingProbe;
+        actionRow2.AddChild(timingProbeAnalyzeButton);
+
+        var reversalAnalyzeButton = new Button { Text = "Analyser demi-tours MAME" };
+        reversalAnalyzeButton.Pressed += OnAnalyzeForcedReversals;
+        actionRow2.AddChild(reversalAnalyzeButton);
 
         var compareMovementButton = new Button { Text = "Comparer mouvement enemy0" };
         compareMovementButton.Pressed += OnCompareEnemy0Movement;
@@ -265,6 +291,51 @@ public partial class Main : Control
             Log("  " + message);
     }
 
+    private void OnCreateCorridorGatedCandidate()
+    {
+        if (!EnsureMameTraceLoaded())
+            return;
+
+        CandidateGenerationResult result = CorridorGatedCandidateTraceFactory.Create(_mameFrames);
+        _candidateFrames = result.Frames;
+        TraceJsonlWriter.Write(_candidateTracePath.Text, _candidateFrames);
+        _pathView.SetTrace(_candidateFrames, 0);
+
+        Log($"Candidate corridor-gated écrite: {_candidateTracePath.Text}");
+        foreach (string message in result.Messages)
+            Log("  " + message);
+    }
+
+    private void OnCreateReversalProbeCandidate()
+    {
+        if (!EnsureMameTraceLoaded())
+            return;
+
+        CandidateGenerationResult result = LearnedReversalProbeCandidateTraceFactory.Create(_mameFrames);
+        _candidateFrames = result.Frames;
+        TraceJsonlWriter.Write(_candidateTracePath.Text, _candidateFrames);
+        _pathView.SetTrace(_candidateFrames, 0);
+
+        Log($"Candidate reversal-probe v11 écrite: {_candidateTracePath.Text}");
+        foreach (string message in result.Messages)
+            Log("  " + message);
+    }
+
+    private void OnCreateTimingProbeCandidate()
+    {
+        if (!EnsureMameTraceLoaded())
+            return;
+
+        CandidateGenerationResult result = TimingProbeCandidateTraceFactory.Create(_mameFrames);
+        _candidateFrames = result.Frames;
+        TraceJsonlWriter.Write(_candidateTracePath.Text, _candidateFrames);
+        _pathView.SetTrace(_candidateFrames, 0);
+
+        Log($"Candidate timing-probe v13 écrite: {_candidateTracePath.Text}");
+        foreach (string message in result.Messages)
+            Log("  " + message);
+    }
+
     private void OnCreateCenterOracleCandidate()
     {
         if (!EnsureMameTraceLoaded())
@@ -319,6 +390,24 @@ public partial class Main : Control
             return;
 
         foreach (string line in DecisionTimingAnalyzer.BuildReport(_mameFrames))
+            Log(line);
+    }
+
+    private void OnAnalyzePreferenceTimingProbe()
+    {
+        if (!EnsureMameTraceLoaded())
+            return;
+
+        foreach (string line in PreferenceTimingProbeAnalyzer.BuildReport(_mameFrames))
+            Log(line);
+    }
+
+    private void OnAnalyzeForcedReversals()
+    {
+        if (!EnsureMameTraceLoaded())
+            return;
+
+        foreach (string line in ForcedReversalAnalyzer.BuildReport(_mameFrames))
             Log(line);
     }
 

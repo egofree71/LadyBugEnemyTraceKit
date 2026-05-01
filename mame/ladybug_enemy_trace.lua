@@ -14,7 +14,7 @@ local CONFIG = {
     output_dir = ".",                       -- use forward slashes on Windows, e.g. "C:/temp/ladybug-traces"
     frames_to_capture = 900,                -- around 15 seconds at 60 fps
     start_delay_frames = 30,                -- lets a scheduled save-state load settle
-    save_state = "",                        -- e.g. "ladybug_lair_exit.sta" or "1" depending on your MAME setup
+    save_state = "test1",                        -- e.g. "ladybug_lair_exit.sta" or "1" depending on your MAME setup
     exit_when_done = false,                 -- true = ask MAME to exit after capture
     pause_when_done = true,                 -- true = pause after capture
     include_full_memory_each_frame = false  -- heavy; normally keep false
